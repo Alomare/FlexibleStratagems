@@ -1,4 +1,4 @@
-# Stratagems Unleashed (research name: Duplicate Stratagems): research notes
+# Flexible Stratagems (formerly Stratagems Unleashed; research name: Duplicate Stratagems): research notes
 
 Goal: let a player bring the same stratagem twice (e.g. two Orbital Railcannon Strikes), which the Hellpod loadout
 screen normally refuses. Game build 25480438. Addresses are RVAs in game.dll unless marked as Ghidra session
@@ -225,3 +225,37 @@ map once per screen visit; the vehicle entries once per session (rescanned only 
   missing, found twice, inconsistent values and a refresh calling elsewhere each turn the mod off. 39 checks;
   engine mutations (first match, field/signature agreement, marker cross-check, fixed slot, natives at the old
   address, chunk overlap counted twice) all caught.
+
+## Version 3 (recon 1): Flexible Stratagems, rulesets, copy cooldown
+
+Renamed: module `mods/alomare/flexible_stratagems`, entry `flexible_stratagems.lua`, global `FlexibleStratagems`, logs
+`FlexibleStratagems*.log`, Mod Options Menu option `alomare.flexible_stratagems.ruleset`; the guid is unchanged.
+
+Rulesets (Off / Less Restricted / Unleashed, default Less Restricted, also without Mod Options Menu):
+- Off: nothing is marked or written; the vehicle bits are given back at once when chosen.
+- Less Restricted: the marker only puts back stratagems that are in the loadout once (a second copy stays refused).
+  The vehicle kind bits are lifted as in Unleashed, so the copy limit applies per stratagem: two of the same tank are
+  allowed, and so are two different tanks (each is one copy of itself). Confirmed by the user (2026-10-03).
+- DiverKit warns when a loadout with duplicates is saved; it records the preset but may refuse to apply it (user, kept
+  as a note on the Nexus page).
+- Unleashed: version 2.
+
+Copy cooldown (offline, the use handler 0xb9a6d0 / 0x135c2c0):
+- Synced loadout system `[0x347ce50]`: players `+0x2d200`, 0x1690 bytes each, peer id at +0; stratagem entries at
+  `+0x1c0` (48 bytes: type +0, uses +4, cooldown start +0x10, end +0x18, base +0x20), count `+0x7c0`. Times are scene
+  clock microseconds (`[0x3326348] + 0x18`).
+- Using entry k: start = now (when flagged), end = duration * 1e6 + base. The Eagle family (type 0x31 Eagle Rearm, or
+  info +0xc8 == 0x31) copies the rearm to every Eagle entry; a shared-cooldown stratagem (info +0x94 != 0) copies end,
+  start and base to every entry of its type in every player's list.
+- The mod: every 6 frames, the local list (peer id `[0x347cef0] + 0xb398`, getter 0x5bae80), one read of the entries;
+  an entry whose end moved past now started a cooldown, so the other entries of its type (unless Eagle family or
+  shared) are held: start = base = now, end = now + 10 s, written again whenever lower (a host sync) until the 10 s
+  pass. A different list (mission start, loadout change) starts over without comparing.
+- Live test of 3-recon-1 (2026-10-04, solo and in a squad): the three rulesets, the copy cooldown (a 4-player
+  session's list "2 of 4" included) and the Eagle and shared-cooldown exceptions all worked as intended, so the
+  client-side cooldown holds. Released as V3.
+- Signatures (optional; without them only the copy cooldown is off): `cooldown_copy` 0xb9a983 (the shared-cooldown
+  loop: synced global, all entry offsets, +0x94), `cooldown_start` 0xb9a7cc (clock, +0x18, start), `eagle_family`
+  0xb9a8af (+0xc8, 0x31), `self_peer` 0x5bae80 (session global, +0xb398).
+
+Texts: `locales/en.lua` + `locales/pt-BR.lua` (bingus_text); OFF is passed as the plain English word.
