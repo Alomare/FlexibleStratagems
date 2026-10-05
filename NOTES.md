@@ -178,3 +178,33 @@ Questions for the test: does Ready with empty slots ready up without the red fla
 Live test of 4-recon-3: the kept scroll (the picked stratagem focused) and Clear Stratagems work. The ready press seen before the game does not: the log shows "Ready press with 3 empty slot(s): held as disabled", "The handler refused before the mod saw the press" and "Ready with 3 empty slot(s)" on the same frame, so the game's UI update runs before the Lua update in a frame and the handler always sees the press first. The user kept the flash (the game noticing the empty slots), so the press path and its signatures (`ready_entry`, `ready_press`) are removed: ready with empty slots works through the flash alone.
 
 Release 4: 20 signatures; tests 73 checks (list closed: 8 reads per frame). Released as V4.
+
+## 4-fix-1: un-ready with empty slots (2026-10-05)
+
+User report on V4: after readying with fewer than 4 stratagems, un-readying takes repeated presses for ~2 s. Cause (offline): the handler only flashes a slot whose flash byte is 0 (`if flash == 0 and not disabled then animate; flash = 1`), but still refuses (error sound, returns 5) while one is flashing; the widget update `0x18932c0` clears the byte only when the animation ends. The mod acted only on a flash starting (0 -> 1), so every press during the flash of the previous press was refused by the game and unseen by the mod.
+
+Fix: while a flash shows, the mod asks the game's own press check `0x1891850(panel + 0x28b0, input)` whether the READY prompt fired this frame. The check only reads (prompt state +0x2f84, action +0x2f88 through the mapper `0x585b80`, input + 0x328 + index * 0x20, confirm while hovered / focused by input mode `[input] + 0xe1ad4`). The input object is `[0x347cf18]`: the UI frame (`0x1437860`) loads it and passes it to the stack dispatcher `0x14ac950`, which for screen type 11 calls the loadout screen's input `0x146d370`, then `0x146d9b0`, then the handler. Pressed + a slot flashing + the timer's idle state unchanged since last frame (the handler's own toggle always flips it: idle -1.0 <-> 1.75 s; the panel update's countdown leaves it at <= 0, never -1.0) = refused, and the mod toggles. The flash-start edge stays as before (also guarded by the timer). The many gates in `0x146d370` before the handler are not mirrored: a press the screen ignores while a flash from a refusal < 2 s ago still shows would be toggled (a narrow window, e.g. the launch starting).
+
+Signatures (optional; without them the press during a flash is off and the V4 behavior remains): `ready_entry` 0x189c25a (panel_entity, panel_local, ready_prompt 0x28b0, press_call; must lie at most 0x40 into the handler, and its call must be `ready_press`), `ready_press` 0x1891850 (the input global). Cost: list closed, 9 reads per frame (the timer added); the press check is called only while a slot flashes.
+
+Tests: 83 checks; mutations of the timer guard, the press path and the prompt offset are caught.
+
+Question for the test: ready with 1-3 stratagems, then press Ready again right away (during the flash): does it cancel on the first press, and ready again on the next?
+
+## 4-fix-1 results and 4-fix-2: the ready pose (2026-10-05)
+
+4-fix-1 confirmed live: ready and un-ready with empty slots work on the first press. Remaining gap: no ready pose (the salute) when readying with fewer stratagems, locally or (presumably) for the squad.
+
+Cause: the handler's toggle (`0x189c250`) does one thing the mod's toggle skipped: before writing the timer it calls the emote sender `0xbf2e20(unused, unit = [panel + 0x1edfc], event, 0.0, 0.0)` with event `0x97e150a4` when readying and `0x5d1d1963` when cancelling. The sender packs the four values (two uints, two floats) and sends RPC `0xf24760a9` to all peers (`0xbde430(rpc, -1, args, 4)`); the panel reset `0x189dde0` and the screen's reset `0x1470700` send the same stop event (skipping a unit of -1). The countdown in the panel update `0x189b920` sends nothing. So the pose is the RPC alone, the same path the vanilla ready takes for every player.
+
+Fix: the mod's toggle sends the same event through the same function, in the same order (before the timer write), and skips a unit of -1 like the reset does.
+
+Signatures (optional; without them the pose is off and the ready still works): `ready_emote` 0x189c552 (inside `ready_toggle`, at most 0x100 past it: panel_unit, emote_cancel, emote_ready, the emote call; ready_timer, players and ui_sound agree with the other ready signatures), `emote_send` 0xbf2e20 (the RPC id and the send call; the `-1` stays literal). The toggle's emote call must be `emote_send`, and the unit offset must lie between the entity (+0x1edf8) and the timer (+0x1ee14). No extra reads per frame; one read and one call per mod toggle.
+
+Tests: 88 checks; mutations (no pose on ready / on cancel, events swapped, no -1 guard, wrong unit offset, pose always off) are caught.
+
+Question for the test: ready with 1-3 stratagems: does the Helldiver salute, and does un-readying stop it? With a squad: do the others see it?
+
+## 4-fix-2 results and release 5 (2026-10-05)
+
+4-fix-2 confirmed live: readying with fewer stratagems plays the ready pose. Released as V5 (both fixes).
