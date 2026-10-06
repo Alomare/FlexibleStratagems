@@ -208,3 +208,7 @@ Question for the test: ready with 1-3 stratagems: does the Helldiver salute, and
 ## 4-fix-2 results and release 5 (2026-10-05)
 
 4-fix-2 confirmed live: readying with fewer stratagems plays the ready pose. Released as V5 (both fixes).
+
+## Version 6: duplicates removed (2026-10-06)
+
+The same stratagem can no longer be picked twice: the mark-back of the loadout's stratagems in the list, the selection clearing after a pick, the Copies per Stratagem option and the `marker` / `select` signatures are gone. The list's item count (refresh_a `list_count`) still tells when the list is open, for the vehicle kind bits, which are lifted as before. Everything else (ready with empty slots, the list kept open, Clear Stratagems) is unchanged. Tests: 74 checks, including the loadout's stratagems staying refused before and after a pick with nothing written or called.
