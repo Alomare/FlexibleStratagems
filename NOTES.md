@@ -212,3 +212,15 @@ Question for the test: ready with 1-3 stratagems: does the Helldiver salute, and
 ## Version 6: duplicates removed (2026-10-06)
 
 The same stratagem can no longer be picked twice: the mark-back of the loadout's stratagems in the list, the selection clearing after a pick, the Copies per Stratagem option and the `marker` / `select` signatures are gone. The list's item count (refresh_a `list_count`) still tells when the list is open, for the vehicle kind bits, which are lifted as before. Everything else (ready with empty slots, the list kept open, Clear Stratagems) is unchanged. Tests: 74 checks, including the loadout's stratagems staying refused before and after a pick with nothing written or called.
+
+## Version 7: two editions (2026-10-07)
+
+One script, two ZIPs per release: `Flexible-Stratagems-<n>-Plus.zip` (everything) and `Flexible-Stratagems-<n>.zip` (the standard edition: no duplicates, no vehicle rule). Same guid and module name, so one replaces the other in a mod manager. `mod.json` has `"edition": "Plus"` and a `standard` block with the fields the standard ZIP replaces (its description).
+
+Markers, handled by `tools/entry.py` (the build and the tests both go through it): lines from `-- BEGIN PLUS` to `-- END PLUS` and lines ending in `-- PLUS` are only in Plus; a `-- STANDARD: <code>` line is code only in the standard edition. `research/signatures.py` marks Plus-only signatures with `'only': 'PLUS'` (marker, select, kind_frv, kind_mech, kind_tank), written inside a marker block.
+
+Plus: version 5's duplicates without the Copies per Stratagem slider. Every refused list item that is in the loadout is marked back, so there is no limit (four slots); Mod Options Menu is not used and the two option texts are gone from the locales.
+
+Standard: the list is not touched and no stratagem flag is written. Its required signatures are the six that locate the screen, the loadout block and the offers; with none of ready, list kept open or Clear Stratagems available it reports NOT AVAILABLE. The stratagem table's size came from kind_frv (`types`), which the standard edition does not carry: `equip_tail` now also reads `type_last` (0x94, the slot search's `cmp eax, 0x94` on type - 1), and `L.types` falls back to `type_last + 2`. Only the scroll restore looks a stratagem up there, and it already needs equip_tail.
+
+Tests: 153 checks over both editions' assembled entries, including that the standard entry holds no Plus code, signature or comment, writes nothing and calls nothing with the list open on a loadout with vehicles, and works with all five Plus signatures broken.
